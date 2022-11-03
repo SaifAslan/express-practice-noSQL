@@ -3,7 +3,7 @@ const express = require("express");
 const {
   getProducts,
   getIndex,
-  getCheckout,
+  // getCheckout,
   getCart,
   getOrders,
   getProduct,
@@ -24,7 +24,7 @@ router.post("/cart", postCart);
 
 router.post("/cart-delete-item", postCartDeleteProduct);
 
-router.get("/checkout", getCheckout);
+// router.get("/checkout", getCheckout);
 
 router.get("/orders", getOrders);
 
