@@ -84,6 +84,11 @@ app.use(express.static(__dirname + "/public"));
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
+app.use((req, res, next) => {
+  res.locals.isAuthenticated = req.session.isLoggedIn;
+  // res.locals.csrfToken = req.csrfToken();
+  next();
+});
 // app.use((req,res,next)=>{
 //   req.headers['x-csrf-token'] = req.body.csrfToken
 //   next()

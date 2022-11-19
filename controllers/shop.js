@@ -22,6 +22,8 @@ exports.getProduct = (req, res, next) => {
       res.render("shop/product-detail", {
         product: product,
         pageTitle: product.title,
+        isAuthenticated: req.session.isLoggedIn,
+
         path: "/products",
       });
     })

@@ -2,6 +2,8 @@ const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const sendGridTransport = require("nodemailer-sendgrid-transport");
+const Crypto = require("crypto");
+const { ObjectId } = require("mongodb");
 const transporter = nodemailer.createTransport(
   sendGridTransport({
     auth: {
@@ -23,6 +25,74 @@ exports.getLogin = (req, res, next) => {
     isAuthenticated: false,
     errorMessage,
   });
+};
+exports.getReset = (req, res, next) => {
+  let errorMessage = req.flash("error");
+  if (errorMessage.length > 0) {
+    errorMessage = errorMessage[0];
+  } else {
+    errorMessage = null;
+  }
+  res.render("auth/reset", {
+    path: "/reset",
+    pageTitle: "Reset",
+    isAuthenticated: false,
+    errorMessage,
+  });
+};
+
+exports.postReset = (req, res, next) => {
+  Crypto.randomBytes(32, (err, buffer) => {
+    if (err) {
+      console.log(err);
+      req.flash("error", "Error occured, contact support!");
+      return req.redirect("/reset");
+    }
+    const token = buffer.toString("hex");
+    User.findOne({ email: req.body.email })
+      .then((user) => {
+        user.resetToken = token;
+        user.resetTokenExpiration = Date.now() + 3600000;
+        return user.save();
+      })
+      .then(() => {
+        transporter.sendMail({
+          to: req.body.email,
+          from: "saifaslan24@gmail.com",
+          subject: "Reset password",
+          html:
+            "<div><h1>reset your password using the link below</h1><a href='http://localhost:3000/reset/" +
+            token +
+            "'>reset</a></div>",
+        });
+        res.redirect("/login");
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  });
+};
+
+exports.getNewPassword = (req, res, next) => {
+  let token = req.params.token;
+  User.findOne({ resetToken: token, resetTokenExpiration: { $gt: Date.now() } })
+    .then((user) => {
+      let errorMessage = req.flash("error");
+      if (errorMessage.length > 0) {
+        errorMessage = errorMessage[0];
+      } else {
+        errorMessage = null;
+      }
+      res.render("auth/new-password", {
+        path: "/new-password",
+        pageTitle: "New Password",
+        errorMessage,
+        isAuthenticated: false,
+        token,
+        userId: user._id.toString(),
+      });
+    })
+    .catch((err) => console.log(err));
 };
 
 exports.getSignup = (req, res, next) => {
@@ -88,17 +158,17 @@ exports.postSignup = (req, res, next) => {
       return bcrypt
         .hash(password, 12)
         .then((hashedPassword) => {
-          // let user = new User({
-          //   email,
-          //   password: hashedPassword,
-          //   cart: { items: [] },
-          // });
-          // return user.save();
+          let user = new User({
+            email,
+            password: hashedPassword,
+            cart: { items: [] },
+          });
+          return user.save();
         })
         .then(() => {
           transporter.sendMail({
             to: email,
-            from: "sop@shop.com",
+            from: "saifaslan24@gmail.com",
             subject: "Signup Succeeded",
             html: "<h1>Signup Succeeded!!</h1>",
           });
@@ -117,4 +187,36 @@ exports.postLogout = (req, res, next) => {
     console.log(err);
     res.redirect("/");
   });
+};
+
+exports.postSaveNewPassword = (req, res, next) => {
+  let password = req.body.password;
+  let userId = req.body.userId;
+  let passwordToken = req.body.token;
+  console.log(password, userId);
+
+  bcrypt
+    .hash(password, 12)
+    .then((hashedPassword) => {
+      User.findOne({
+        _id: new ObjectId(userId),
+        resetToken: passwordToken,
+        resetTokenExpiration: { $gt: Date.now() },
+      })
+        .then((user) => {
+          user.password = hashedPassword;
+          user.resetToken = undefined;
+          user.resetTokenExpiration = undefined;
+          return user.save();
+        })
+        .then(() => {
+          res.redirect("/login");
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 };
