@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const sendgridTransport = require('nodemailer-sendgrid-transport');
-const { validationResult } = require('express-validator/check');
+const { validationResult } = require('express-validator');
 
 const User = require('../models/user');
 
@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
       api_key:
-        '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'
+        process.env.sendGrid_API_key
     }
   })
 );
@@ -59,17 +59,18 @@ exports.postLogin = (req, res, next) => {
   const email = req.body.email;
   const password = req.body.password;
 
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
+  const errors = validationResult(req).errors;
+  console.log(errors);
+  if (errors.length>0) {
     return res.status(422).render('auth/login', {
       path: '/login',
       pageTitle: 'Login',
-      errorMessage: errors.array()[0].msg,
+      errorMessage: errors[0].msg,
       oldInput: {
         email: email,
         password: password
       },
-      validationErrors: errors.array()
+      validationErrors: errors
     });
   }
 
@@ -90,11 +91,15 @@ exports.postLogin = (req, res, next) => {
       bcrypt
         .compare(password, user.password)
         .then(doMatch => {
+
           if (doMatch) {
+
             req.session.isLoggedIn = true;
             req.session.user = user;
             return req.session.save(err => {
               console.log(err);
+              console.log(doMatch);
+
               res.redirect('/');
             });
           }
@@ -106,7 +111,7 @@ exports.postLogin = (req, res, next) => {
               email: email,
               password: password
             },
-            validationErrors: []
+            validationErrors: errors
           });
         })
         .catch(err => {
@@ -114,15 +119,18 @@ exports.postLogin = (req, res, next) => {
           res.redirect('/login');
         });
     })
-    .catch(err => console.log(err));
-};
+    .catch((err) => {
+      const error = new Error(err);
+      err.httpStatusCode = 500;
+      return next(error);
+    });};
 
 exports.postSignup = (req, res, next) => {
   const email = req.body.email;
   const password = req.body.password;
 
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
+  const errors = validationResult(req).errors;
+  if (errors.length>0) {
     console.log(errors.array());
     return res.status(422).render('auth/signup', {
       path: '/signup',
@@ -133,7 +141,7 @@ exports.postSignup = (req, res, next) => {
         password: password,
         confirmPassword: req.body.confirmPassword
       },
-      validationErrors: errors.array()
+      validationErrors: []
     });
   }
 
@@ -149,15 +157,17 @@ exports.postSignup = (req, res, next) => {
     })
     .then(result => {
       res.redirect('/login');
-      // return transporter.sendMail({
-      //   to: email,
-      //   from: 'shop@node-complete.com',
-      //   subject: 'Signup succeeded!',
-      //   html: '<h1>You successfully signed up!</h1>'
-      // });
+      return transporter.sendMail({
+        to: email,
+        from: 'shop@node-complete.com',
+        subject: 'Signup succeeded!',
+        html: '<h1>You successfully signed up!</h1>'
+      });
     })
-    .catch(err => {
-      console.log(err);
+     .catch((err) => {
+      const error = new Error(err);
+      err.httpStatusCode = 500;
+      return next(error);
     });
 };
 
@@ -211,8 +221,10 @@ exports.postReset = (req, res, next) => {
           `
         });
       })
-      .catch(err => {
-        console.log(err);
+      .catch((err) => {
+        const error = new Error(err);
+        err.httpStatusCode = 500;
+        return next(error);
       });
   });
 };
@@ -235,8 +247,10 @@ exports.getNewPassword = (req, res, next) => {
         passwordToken: token
       });
     })
-    .catch(err => {
-      console.log(err);
+     .catch((err) => {
+      const error = new Error(err);
+      err.httpStatusCode = 500;
+      return next(error);
     });
 };
 
@@ -264,7 +278,9 @@ exports.postNewPassword = (req, res, next) => {
     .then(result => {
       res.redirect('/login');
     })
-    .catch(err => {
-      console.log(err);
+     .catch((err) => {
+      const error = new Error(err);
+      err.httpStatusCode = 500;
+      return next(error);
     });
 };

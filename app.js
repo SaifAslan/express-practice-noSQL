@@ -18,7 +18,8 @@ const shopRoutes = require("./routes/shop");
 
 const authRoutes = require("./routes/auth");
 
-const { get404 } = require("./controllers/error");
+const multer = require("multer");
+const { get404, get500 } = require("./controllers/error");
 // const { findUserById } = require("./models/user");
 // const mongodb = require("mongodb");
 const User = require("./models/user");
@@ -34,6 +35,7 @@ const store = new MongoDBStore({
   uri: mongodb_URI,
   collection: "sessions",
 });
+
 const mongoose = require("mongoose");
 
 // const {
@@ -42,6 +44,29 @@ const mongoose = require("mongoose");
 // } = doubleCsrf({});
 
 const app = express();
+
+const fileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "images");
+  },
+  filename: (req, file, cb) => {
+    cb(null, new Date().toISOString() + "_" + file.originalname);
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  if (
+    file.mimetype === "image/png" ||
+    file.mimetype === "image/jpg" ||
+    file.mimetype === "image/jpeg"
+  ) {
+    cb(null, true);
+  } else {
+    cb(null, false);
+  }
+};
+
+app.use(multer({ storage: fileStorage, fileFilter }).single("image"));
 
 app.set("view engine", "ejs");
 app.set("views", "views");
@@ -69,14 +94,20 @@ app.use(flash());
 // app.use(doubleCsrfProtection);
 
 app.use((req, res, next) => {
+  if (!req.session.user) {
+    return next();
+  }
   User.findById(req.session?.user?._id)
     .then((user) => {
+      if (!user) {
+        return next();
+      }
       req.user = user;
       next();
     })
     .catch((err) => {
-      console.log(err);
-      next();
+      // use next with async code only otherwise throw an Error
+      next(new Error(err));
     });
 });
 
@@ -97,7 +128,18 @@ app.use("/admin", adminRoutes);
 app.use(shopRoutes);
 app.use(authRoutes);
 
+app.get("/500", get500);
+
 app.use(get404);
+
+app.use((error, req, res, next) => {
+  console.log(error);
+  res.status(500).render("500", {
+    pageTitle: "Error!",
+    path: "/500",
+    isAuthenticated: req.session.isLoggedIn,
+  });
+});
 
 const server = http.createServer(app);
 
